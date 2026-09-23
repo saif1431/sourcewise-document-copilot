@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "document-copilot-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic==1.20.0",
+    "fastapi==0.141.1",
+    "groq==1.7.0",
+    "httpx==0.28.1",
+    "langchain-huggingface==1.2.2",
+    "pgvector==0.5.0",
+    "psycopg[binary]==3.3.5",
+    "pydantic==2.13.5",
+    "pydantic-ai==2.43.0",
+    "pydantic-settings==2.15.0",
+    "sentence-transformers==6.0.1",
+    "sqlalchemy==2.0.54",
+    "structlog==26.1.0",
+    "supabase==2.31.0",
+    "uvicorn==0.53.0",
+]
+
+
+[project.optional-dependencies]
+ingest = [
+    "docling==2.96.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+add-bounds = "exact"
+exclude-newer = "7 days"
+
+[dependency-groups]
+dev = [
+    "ipykernel==7.3.0",
+    "pytest==9.1.1",
+    "ruff==0.16.7",
+]
+
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "integration: tests that require live Supabase and Groq credentials",
+]

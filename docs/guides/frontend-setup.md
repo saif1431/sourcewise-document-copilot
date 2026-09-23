@@ -1,0 +1,29 @@
+# Frontend setup
+
+This project uses a Vite + React SPA because the frontend is an internal tool that mainly needs fast iteration, authenticated app flows, and a clean connection to the FastAPI backend. We do not need the extra server-rendering, SEO, or full-stack routing features that Next.js is optimized for.
+
+## Init (from empty `frontend/`)
+
+```bash
+cd frontend
+npm create vite . --template react-ts
+npm install
+npm add react-router-dom @supabase/supabase-js
+npm add -D tailwindcss @tailwindcss/vite
+npm dlx shadcn@latest init
+```
+
+## Run
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Check
+
+```bash
+npm tsc --noEmit
+npm lint
+```
