@@ -7,6 +7,7 @@ from alembic import context
 
 from app.config import settings
 from app.database.models import Base
+from app.database.url import normalize_database_url
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -20,16 +21,11 @@ if config.config_file_name is not None:
 # our models' metadata drives autogenerate
 target_metadata = Base.metadata
 
-# DATABASE_URL uses the generic "postgresql://" scheme; we installed psycopg (v3),
-# not psycopg2, so the dialect+driver must be explicit or SQLAlchemy looks for psycopg2.
-#
 # Kept as a plain Python variable rather than written into `config` (e.g. via
 # config.set_main_option): alembic.ini is backed by configparser, which treats
 # "%" as the start of interpolation syntax ("%(name)s") — and Supabase passwords
 # routinely contain a literal "%", which then fails to parse.
-db_url = settings.database_url
-if db_url.startswith("postgresql://"):
-    db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+db_url = normalize_database_url(settings.database_url)
 
 
 def include_object(object, name, type_, reflected, compare_to):

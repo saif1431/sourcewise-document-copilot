@@ -5,8 +5,10 @@ FastAPI service for Document Copilot. See [../CLAUDE.md](../CLAUDE.md) and [CLAU
 ## Run
 
 ```bash
-uv run uvicorn app.main:app --reload
+uv run python -m app
 ```
+
+**Don't run `uv run uvicorn app.main:app --reload` directly on Windows** — any database-touching request will hang or fail. uvicorn's CLI creates its asyncio event loop before importing the app, so a Windows event-loop-policy fix inside the app itself always runs too late; the default Windows loop (Proactor) isn't compatible with how psycopg does socket I/O, even for synchronous calls dispatched to a thread. `app/__main__.py` sets the correct policy first, then starts uvicorn programmatically in the same process. This is a no-op on Linux/Mac (Railway prod), so it's safe everywhere.
 
 Stop with `Ctrl+C` — don't kill the terminal window, or a stray process can keep `.venv` files locked on Windows.
 

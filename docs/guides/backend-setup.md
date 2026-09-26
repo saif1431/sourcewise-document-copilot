@@ -32,7 +32,7 @@ uv run alembic revision --autogenerate -m "add document tables"
 Always review the generated migration. Add explicit operations for Supabase/Postgres features that autogenerate cannot reliably infer:
 
 - `create extension if not exists vector`
-- `vector(1536)` columns
+- `vector(384)` columns (dimension for `all-MiniLM-L6-v2`)
 - generated `tsvector` columns
 - HNSW and GIN indexes
 - RLS enablement and policies
@@ -49,7 +49,7 @@ uv run alembic upgrade head
 cd backend
 uv sync
 uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
+uv run python -m app
 ```
 
 ## Imports (`from app...`)
@@ -62,15 +62,10 @@ Preferred API server command:
 
 ```bash
 cd backend
-uv run uvicorn app.main:app --reload
+uv run python -m app
 ```
 
-Direct file execution also works:
-
-```bash
-cd backend
-uv run python app/main.py
-```
+**Not** `uv run uvicorn app.main:app --reload` directly — on Windows, any database-touching request hangs or fails, because uvicorn's CLI creates its asyncio event loop before importing the app, so a Windows event-loop-policy fix placed inside the app always runs too late. `app/__main__.py` sets the policy first, then starts uvicorn programmatically in the same process; this is a no-op on Linux/Mac (Railway prod).
 
 For Jupyter, install and select the backend kernel:
 

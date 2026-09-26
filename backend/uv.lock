@@ -13,7 +13,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-09-16T06:15:39.5152013Z"
+exclude-newer = "2026-09-18T10:08:53.4669713Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -897,6 +897,7 @@ ingest = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "docling" },
     { name = "ipykernel" },
     { name = "pytest" },
     { name = "ruff" },
@@ -925,6 +926,7 @@ provides-extras = ["ingest"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "docling", specifier = "==2.96.0" },
     { name = "ipykernel", specifier = "==7.3.0" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "ruff", specifier = "==0.16.7" },

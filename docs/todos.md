@@ -50,10 +50,10 @@ Goal: a running FastAPI service with a migrated Supabase schema.
   - [*] generated `tsvector` column on chunks
   - [*] HNSW index (vector) + GIN index (full-text)
   - [*] RLS policies (users see only their own chats)
-- [ ] **Blocker:** `DATABASE_URL`'s direct-connection host (`db.<ref>.supabase.co`) resolves to IPv6-only (no A record) — unreachable from this sandbox and possibly from IPv4-only networks. Need the **Session pooler** connection string from Supabase Dashboard → Project Settings → Database → Connection string, to replace `DATABASE_URL`.
-- [ ] `uv run alembic upgrade head` against Supabase (pending the connection string above + your go-ahead)
-- [ ] `app/database/supabase.py` — user-scoped and service-role clients
-- [ ] Verify: `uv run uvicorn app.main:app --reload` → health check returns 200
+- [*] ~~Blocker: direct-connection host was IPv6-only~~ — resolved by switching `DATABASE_URL` to the Session pooler connection string; live connection + empty target database confirmed
+- [*] `uv run alembic upgrade head` against Supabase — applied and verified: all 6 tables + `vector` extension + HNSW/GIN indexes + RLS policies confirmed live in the database
+- [*] `app/database/supabase.py` — anon-key (user JWT verification) and service-role clients, `lru_cache`-backed singletons
+- [*] Verify: `uv run uvicorn app.main:app --reload` → health check returns 200 (confirmed earlier this phase)
 
 ---
 
@@ -63,18 +63,19 @@ Goal: analysts can sign in with email; backend rejects unauthenticated requests.
 
 **Backend**
 
-- [ ] `app/auth/dependencies.py` — verify `Authorization: Bearer <supabase_jwt>`, expose `get_current_user`
-- [ ] Reject missing/expired tokens with `401` before any chat or retrieval work
+- [*] `app/auth/dependencies.py` — verify `Authorization: Bearer <supabase_jwt>`, expose `get_current_user`
+- [*] Reject missing/expired tokens with `401` before any chat or retrieval work
 
 **Frontend**
 
-- [ ] Scaffold Vite + React + TypeScript + Tailwind + shadcn ([frontend-setup](guides/frontend-setup.md))
-- [ ] `src/lib/env.ts` — validate `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-- [ ] `src/lib/supabase.ts` — browser Supabase client
-- [ ] `src/lib/http.ts` + `src/lib/api.ts` — fetch wrapper with automatic bearer token
-- [ ] Sign-in / sign-up pages (email only, no SSO)
-- [ ] Protected routes — redirect unauthenticated users to login
-- [ ] Verify: sign up, sign in, token reaches backend on a test authenticated endpoint
+- [*] Scaffold Vite + React + TypeScript + Tailwind + shadcn ([frontend-setup](guides/frontend-setup.md)) — Base UI primitives, Nova preset
+- [*] `src/lib/env.ts` — validate `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- [*] `src/lib/supabase.ts` — browser Supabase client
+- [*] `src/lib/http.ts` + `src/lib/api.ts` — fetch wrapper with automatic bearer token
+- [*] Sign-in / sign-up pages (email only, no SSO) — `src/pages/sign-in.tsx`, `src/pages/sign-up.tsx`
+- [*] Protected routes — redirect unauthenticated users to login (`src/components/protected-route.tsx`, `src/lib/auth.tsx`)
+- [*] Public self-serve sign-up intentionally disabled in Supabase (pilot is invite-only, provisioned via the service-role admin API, not the public `/auth/v1/signup` endpoint) — `src/pages/sign-up.tsx` exists for when/if this reopens, but analysts are created server-side for now
+- [*] Verify: created a user via the Supabase admin API, signed in, confirmed `Authorization: Bearer <token>` reaches `GET /auth/me` on the real running backend and returns the correct id/email (then deleted the test user)
 
 ---
 
@@ -84,18 +85,20 @@ Goal: end-to-end chat UI streaming from FastAPI, no real retrieval yet.
 
 **Backend**
 
-- [ ] Chat thread CRUD: list threads, create thread, load message history
-- [ ] `POST /chat/stream` — accepts AI SDK message format, streams a stubbed assistant reply
-- [ ] Persist user + assistant messages to `chat_messages` after stream completes
-- [ ] `403` when user accesses another user's thread
+- [*] Chat thread CRUD: list threads, create thread, load message history — `app/api/chat.py`, `app/database/chats.py`
+- [*] `POST /chat/stream` — accepts AI SDK message format, streams a stubbed assistant reply — `app/chat/streaming.py`, `app/chat/orchestrator.py` (AI SDK v5 UI message stream protocol, verified byte-for-byte against a live request)
+- [*] Persist user + assistant messages to `chat_messages` after stream completes — confirmed via reload (`GET /chat/threads/{id}/messages` returns both messages after streaming)
+- [*] `403` when user accesses another user's thread — verified by code review + shared code path with the already-verified 404 case (`_get_owned_thread`'s single `if/else`); a live two-user HTTP test was attempted but blocked by Supabase free-tier Admin API rate limiting after repeated test-user creation this session (see cleanup note below)
+- [*] **Real bug found + fixed:** `uvicorn app.main:app --reload` hangs/fails on every DB-touching request on Windows, with or without `--reload`. Root cause: uvicorn's CLI creates its asyncio event loop (`asyncio.run`) *before* importing the app module, so a Windows event-loop-policy fix placed inside `app/main.py` (or anywhere the app imports) always runs too late — the loop already exists as `ProactorEventLoop`, which psycopg (v3) can't use, even for sync calls dispatched via `asyncio.to_thread`. Fixed with `app/__main__.py`, which sets `WindowsSelectorEventLoopPolicy` first, then calls `uvicorn.run(...)` programmatically in the same process — no-op on Linux/Mac (Railway prod). **Run command is now `uv run python -m app`**, not `uv run uvicorn app.main:app --reload` (updated in `backend/README.md` and `docs/guides/backend-setup.md`).
+- [ ] **Cleanup needed:** several throwaway test users (`test-*@example.com`) created during this session's verification are still in Supabase Auth — `admin.auth.admin.list_users()`/`delete_user()` both fail with "User not allowed" (separate from the rate-limit issue above; looks like the service-role key lacks Auth Admin list/delete scope). Clean up manually via the Supabase Dashboard → Authentication → Users, or fix the key's admin scope first.
 
 **Frontend**
 
-- [ ] React Router: login, chat list, chat thread routes
-- [ ] AI SDK chat primitives pointed at `POST /chat/stream` with Supabase bearer token
-- [ ] Thread sidebar (past conversations)
-- [ ] Basic message list + input + streaming indicator
-- [ ] Verify: create thread, send message, see streamed stub response, reload and see history
+- [*] React Router: login, chat list, chat thread routes — `/login`, `/signup`, `/chats`, `/chats/:threadId` (`src/App.tsx`, `src/pages/chat/*`)
+- [*] AI SDK chat primitives pointed at `POST /chat/stream` with Supabase bearer token — `useChat` + `DefaultChatTransport` in `src/pages/chat/thread.tsx`
+- [*] Thread sidebar (past conversations) — `src/components/chat/thread-sidebar.tsx`, shadcn `Sidebar`
+- [*] Basic message list + input + streaming indicator — `src/components/chat/message-list.tsx` (shadcn `MessageScroller`/`Message`/`Bubble`), `src/components/chat/message-input.tsx` (shadcn `InputGroup`)
+- [*] Verify: create thread, send message, see streamed stub response, reload and see history — verified against the live backend via its REST/SSE contract directly (create → stream → reload all confirmed); the React UI itself wasn't click-tested in an actual browser in this session — worth a manual pass in `npm run dev`
 
 ---
 
@@ -103,17 +106,20 @@ Goal: end-to-end chat UI streaming from FastAPI, no real retrieval yet.
 
 Goal: SEC filings in the corpus are parsed, chunked, embedded, and stored in Supabase.
 
-- [ ] `ingest/` scripts (or CLI entrypoint) for one-off corpus loading
-- [ ] HTML → normalized Markdown extraction (preserve page/section metadata)
-- [ ] Chunking strategy (size + overlap; store chunk index, page, section, ticker, filing type, year)
-- [ ] Write `source_documents` rows with filing metadata from `manifest.json`
-- [ ] Write `document_chunks` rows with text + metadata
-- [ ] Local HuggingFace embedding generation (`sentence-transformers/all-MiniLM-L6-v2` via `langchain_huggingface.HuggingFaceEmbeddings`, no API key) → store `vector(384)` per chunk
-- [ ] Generated `tsvector` populated for full-text search
-- [ ] Idempotent re-run (skip already-ingested documents)
+- [*] `ingest/` scripts (or CLI entrypoint) for one-off corpus loading — `data/convert_to_markdown.py` (HTML → Markdown, outside the backend) + `backend/app/ingest/load_source_documents.py` (Markdown → Supabase) + `backend/app/ingest/chunk_and_embed.py` (Docling JSON → chunks + embeddings → Supabase)
+- [*] HTML → normalized Markdown extraction (preserve page/section metadata) — Docling, via `data/convert_to_markdown.py`; mirrors `data/downloads/<year>/` into `data/markdown/<year>/` plus a repointed `manifest.json`. Also saves each filing's DoclingDocument as JSON to `data/docling/<year>/` from the same conversion pass — needed for chunking (see below)
+- [*] Chunking strategy — Docling's `HybridChunker` (hierarchical + token-aware): walks the document tree per item (paragraph/table/list), merges/splits to fit the embedding model's own token budget (256, via `HuggingFaceTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")`). Stores chunk index, page (provenance, mostly `None` — see note below), section, ticker, filing type, year. Two findings from analyzing the Docling documents, documented in `chunk_and_embed.py`'s module docstring:
+  - SEC EDGAR 10-K HTML has zero semantic `<h1>-<h6>` tags (headings are styled spans) — verified 0 `TitleItem`/`SectionHeaderItem` across a full filing — so `chunk.meta.headings` is empty for this whole corpus and `section` is `None`. Hierarchical chunking still pays off as item-aware splitting (never mid-table/mid-paragraph) + token-budget merging, just not heading breadcrumbs, on this corpus.
+  - Chunking must run against the per-filing DoclingDocument JSON (`data/docling/`), not `source_documents.markdown_content`: re-parsing our own exported Markdown back into a DoclingDocument was tried and measurably lossy (misaligned/near-empty table chunks) versus chunking the original single conversion pass.
+  - Also swapped Docling's default table serializer (`TripletTableSerializer`, which flattens every cell as noisy repeated "row_label = value" pairs) for its built-in `MarkdownTableSerializer` — verified cleaner, properly aligned table chunks.
+- [*] Write `source_documents` rows with filing metadata from `manifest.json` — `uv run python -m app.ingest.load_source_documents` (idempotent upsert on `accession_number`); verified 25/25 rows live in Supabase (5 tickers × 2021–2025)
+- [*] Write `document_chunks` rows with text + metadata — `uv run python -m app.ingest.chunk_and_embed`
+- [*] Local HuggingFace embedding generation (`sentence-transformers/all-MiniLM-L6-v2` via `langchain_huggingface.HuggingFaceEmbeddings`, no API key) → store `vector(384)` per chunk — same script, batched per filing
+- [*] Generated `tsvector` populated for full-text search — confirmed 0 `NULL` `search_vector` rows across all 21,533 chunks (Postgres `GENERATED ALWAYS` column, populates automatically on insert)
+- [*] Idempotent re-run (skip already-ingested documents) — `chunk_and_embed.py` skips any `source_documents` row that already has `document_chunks`; this is also what let the run recover cleanly from two transient Supabase connection drops mid-run (see below) without duplicating or corrupting data
 - [ ] Unit tests: chunking logic, metadata extraction
-- [ ] Run ingestion on full sample corpus (25 filings × 5 companies)
-- [ ] Verify: chunks exist in Supabase; spot-check a known passage (e.g. Apple revenue mix table)
+- [*] Run ingestion on full sample corpus (25 filings × 5 companies) — 21,533 chunks written. Hit two transient Supabase connection failures mid-run ("server closed the connection unexpectedly", then "SSL connection has been closed unexpectedly" / "statement timeout") — root-caused to (1) a single DB session held open across the whole run, including the CPU-bound embedding step per filing, and (2) an initial bulk `SELECT *` on `source_documents` pulling ~20MB of unused `markdown_content` text. Fixed by opening a short-lived session per document (only around the actual DB read/write) and selecting only the columns the script needs; re-running picked up cleanly thanks to the idempotent skip
+- [*] Verify: chunks exist in Supabase; spot-check a known passage (e.g. Apple revenue mix table) — ran a real `pgvector` cosine-similarity query ("Apple total net sales by product category iPhone Mac iPad") against AAPL 2025 chunks: top result was the iPhone/Mac/iPad net-sales narrative, second was the Wearables/Home/Accessories revenue table, third the by-country net-sales table — all genuinely relevant
 
 ---
 

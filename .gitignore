@@ -28,6 +28,14 @@ pnpm-debug.log*
 # Data / artifacts (downloaded corpus files are large, never check in)
 /data/downloads/*
 !/data/downloads/.gitkeep
+
+# Converted Markdown corpus is regenerated from data/downloads/, never check in
+/data/markdown/*
+!/data/markdown/.gitkeep
+
+# Docling structured documents (chunking input) are regenerated from data/downloads/, never check in
+/data/docling/*
+!/data/docling/.gitkeep
 *.parquet
 
 # IDE / OS
