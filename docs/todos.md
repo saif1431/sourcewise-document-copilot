@@ -127,13 +127,13 @@ Goal: SEC filings in the corpus are parsed, chunked, embedded, and stored in Sup
 
 Goal: a user question returns ranked, relevant source passages.
 
-- [ ] `retrieval/queries.py` — pgvector semantic search over `document_chunks`
-- [ ] `retrieval/queries.py` — Postgres full-text search over `search_vector`
-- [ ] `retrieval/fusion.py` — Reciprocal Rank Fusion in Python
-- [ ] `retrieval/retriever.py` — query → fused ranked passages + neighbor chunks
-- [ ] Unit tests: fusion ranking, query assembly (mock DB)
-- [ ] Integration test (optional, `@pytest.mark.integration`): real query against ingested corpus
-- [ ] Verify: test queries from [client-brief](client-brief.md) return relevant chunks (manual or scripted)
+- [*] `app/retrieval/queries.py` — pgvector semantic search over `document_chunks` (`build_semantic_search_stmt`, ordered by `embedding.cosine_distance`)
+- [*] `app/retrieval/queries.py` — Postgres full-text search over `search_vector` (`build_full_text_search_stmt`, `websearch_to_tsquery` + `ts_rank`, so analysts can type plain phrasing instead of Postgres tsquery syntax). Statement-building is split from execution so both are unit-testable without a DB
+- [*] `app/retrieval/fusion.py` — Reciprocal Rank Fusion in Python (`reciprocal_rank_fusion`, generic over any hashable ID, standard `k=60`)
+- [*] `app/retrieval/retriever.py` — `retrieve(query, top_k=8)`: embeds the query (shared `app/embeddings.py` singleton, same model as ingestion so vectors share a space), runs both searches (20 candidates each), fuses with RRF, attaches each hit's immediate neighbor chunks (`chunk_index ± 1`) for grounding context. `page`/`section` are null on most results — expected, see Phase 4 notes on SEC EDGAR HTML lacking pagination/semantic headings
+- [*] Unit tests: fusion ranking (`tests/retrieval/test_fusion.py`, 6 tests — ordering, cross-strategy agreement, empty/disjoint lists, `k` sensitivity), query assembly (`tests/retrieval/test_queries.py`, 7 tests — compiled SQL/bound-params assertions against the Postgres dialect, no DB needed)
+- [*] Integration test (`@pytest.mark.integration`, `tests/retrieval/test_retriever_integration.py`): 3 tests against the live ingested corpus — all passing (`uv run pytest -m integration`)
+- [*] Verify: test queries from [client-brief](client-brief.md) return relevant chunks — ran 4 of the 10 example questions (NVIDIA data-center demand/customers, AI/export-control/supply-chain risk language, MSFT/NVDA capex & cloud infrastructure commentary, Apple/NVIDIA supplier concentration) through `retrieve()`; every top-3 result was on-topic and correctly attributed to ticker/fiscal year
 
 ---
 

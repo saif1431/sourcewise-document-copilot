@@ -45,12 +45,12 @@ from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTok
 from docling_core.transforms.serializer.base import BaseDocSerializer
 from docling_core.transforms.serializer.markdown import MarkdownTableSerializer
 from docling_core.types.doc.document import DoclingDocument
-from langchain_huggingface import HuggingFaceEmbeddings
 from sqlalchemy import select
 
 from app.config import settings
 from app.database.models import DocumentChunk, SourceDocument
 from app.database.session import session_maker
+from app.embeddings import get_embeddings
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCLING_DIR = REPO_ROOT / "data" / "docling"
@@ -80,7 +80,7 @@ def chunk_and_embed_documents() -> int:
 
     tokenizer = HuggingFaceTokenizer.from_pretrained(settings.embedding_model_name)
     chunker = HybridChunker(tokenizer=tokenizer, serializer_provider=MarkdownTableChunkingSerializerProvider())
-    embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model_name)
+    embeddings = get_embeddings()
 
     # Select only the columns this script needs — SourceDocument.markdown_content
     # is unused here but can be ~1MB per row, and pulling all 25 in one query
